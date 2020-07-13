@@ -41,8 +41,6 @@ FusionEKF::FusionEKF()
   H_laser_ << 1, 0, 0, 0,
               0, 1, 0, 0;
 
-  //Radar/Jacobian Matrix init to correct size
-  Hj_.resize(3, 4);
 }
 
 /**
@@ -90,10 +88,11 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack)
                   0;
 
       //initialize covariance matrix
+      ekf_.P_ = MatrixXd(4, 4);
       ekf_.P_ << .0225, 0, 0, 0,
                   0, .0225, 0, 0,
                   0, 0, 1000, 0,
-                  0, 0, 0, 1000;
+                  0, 0, 0, 1000;           
     }
 
     //set previous timestamp to first measurment time
@@ -108,7 +107,7 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack)
    */
   float dt = measurement_pack.timestamp_ - previous_timestamp_;
   ekf_.Predict(dt);
-
+  cout << "Predicted! " << endl;
   /**
    * Update
    */
@@ -118,7 +117,14 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack)
   }
   else
   {
-    ekf_.Update(measurement_pack.raw_measurements_);
+    ekf_.H_ = H_laser_;
+    ekf_.R_ = R_laser_;
+    VectorXd z = VectorXd(2);
+    z <<  measurement_pack.raw_measurements_(0),
+          measurement_pack.raw_measurements_(1),
+    cout << "Preupdated! " << endl;
+    ekf_.Update(z);
+    cout << "Updated! " << endl;
   }
 
   // print the output
