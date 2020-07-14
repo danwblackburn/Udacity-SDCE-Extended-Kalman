@@ -56,15 +56,10 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack)
    */
   if (!is_initialized_)
   {
-    /**
-     * TODO: Initialize the state ekf_.x_ with the first measurement.
-     * TODO: Create the covariance matrix.
-     * You'll need to convert radar from polar to cartesian coordinates.
-     */
 
     // first measurement
     cout << "EKF: " << endl;
-    ekf_.x_ = VectorXd(4);
+    VectorXd x_ = VectorXd(4);
 
     if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR)
     {
@@ -75,23 +70,31 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack)
       double x = rho * cos(phi);
 
       //initialize state
-      ekf_.x_ << x, y, 0, 0;
+      x_ << x, y, 0, 0;
     }
     else if (measurement_pack.sensor_type_ == MeasurementPackage::LASER)
     {
       //initialize state vector
-      ekf_.x_ <<  measurement_pack.raw_measurements_[0],
-                  measurement_pack.raw_measurements_[1],
-                  0,
-                  0;        
+      x_ << measurement_pack.raw_measurements_[0],
+            measurement_pack.raw_measurements_[1],
+            0,
+            0;        
     }
 
-      //initialize covariance matrix
-      ekf_.P_ = MatrixXd(4, 4);
-      ekf_.P_ <<  1, 0, 0, 0,
-                  0, 1, 0, 0,
-                  0, 0, 1000, 0,
-                  0, 0, 0, 1000;   
+    //initial covariance matrix
+    MatrixXd P_ = MatrixXd(4, 4);
+    P_ <<   1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1000, 0,
+            0, 0, 0, 1000;   
+
+    //Initialize F and Q to correct size
+    MatrixXd F_ = MatrixXd(4,4);
+    MatrixXd Q_ = MatrixXd(4,4);
+    
+    //Init ekf to insure that all matrices are valid for future steps
+    ekf_.Init(x_, P_, F_, H_laser_, R_laser_, Q_);
+
 
     //set previous timestamp to first measurment time
     previous_timestamp_ = measurement_pack.timestamp_;
@@ -100,16 +103,17 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack)
     return;
   }
 
+  //calculate time from last packet (convert from microseconds to seconds)
   float micros_to_s = 1000000;
   float dt = (measurement_pack.timestamp_ - previous_timestamp_) / micros_to_s;
+  //update previous packet time to current
   previous_timestamp_ = measurement_pack.timestamp_;
 
   /**
    * Prediction
    */
   ekf_.Predict(dt);
-  cout << "Predicted! " << endl;
-  cout << ekf_.x_ << endl;
+  
   /**
    * Update
    */
@@ -118,20 +122,14 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack)
     ekf_.H_ = tools.CalculateJacobian(ekf_.x_);
     ekf_.R_ = R_radar_;
     VectorXd z = measurement_pack.raw_measurements_;
-    cout << "Radar Preupdated! " << endl;
     ekf_.UpdateEKF(z);
-    cout << "Radar Updated! " << endl;
   }
   else
   {
     ekf_.H_ = H_laser_;
     ekf_.R_ = R_laser_;
-    VectorXd z = VectorXd(2);
-    z <<  measurement_pack.raw_measurements_(0),
-          measurement_pack.raw_measurements_(1),
-    cout << "Laser Preupdated! " << endl;
+    VectorXd z = measurement_pack.raw_measurements_;
     ekf_.Update(z);
-    cout << "Laser Updated! " << endl;
   }
 
   // print the output
